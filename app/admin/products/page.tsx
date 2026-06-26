@@ -70,7 +70,7 @@ export default async function AdminProductsPage() {
                 </div>
                 <div>
                   <strong>{product.name}</strong>
-                  <span>{product.sku || "未填写 SKU"}</span>
+                  <span>{product.sku || "未填写型号"}</span>
                   <small>/products/{product.slug}</small>
                 </div>
                 <span className="category-pill">

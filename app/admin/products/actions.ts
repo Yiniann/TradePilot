@@ -188,6 +188,25 @@ function readVariants(formData: FormData) {
   }
 }
 
+async function saveMainImages(formData: FormData) {
+  const images = formData
+    .getAll("mainImages")
+    .filter((image): image is File => image instanceof File && image.size > 0)
+    .slice(0, 6);
+
+  const imageUrls = [];
+
+  for (const image of images) {
+    const imageUrl = await saveProductImage(image);
+
+    if (imageUrl) {
+      imageUrls.push(imageUrl);
+    }
+  }
+
+  return imageUrls;
+}
+
 export async function createProduct(formData: FormData) {
   await requireProductManager();
   const name = readText(formData, "name");
@@ -200,7 +219,9 @@ export async function createProduct(formData: FormData) {
   const slug = await uniqueSlug(providedSlug || slugify(name));
   const categoryId = await resolveCategoryId(formData);
   const cover = formData.get("coverImage");
-  const coverImage = cover instanceof File ? await saveProductImage(cover) : null;
+  const mainImages = await saveMainImages(formData);
+  const legacyCoverImage = cover instanceof File ? await saveProductImage(cover) : null;
+  const coverImage = mainImages[0] ?? legacyCoverImage;
   const variants = readVariants(formData);
 
   await prisma.product.create({
@@ -215,6 +236,7 @@ export async function createProduct(formData: FormData) {
       priceNote: readText(formData, "priceNote") || null,
       status: readStatus(formData),
       coverImage,
+      gallery: mainImages,
       sortOrder: Number(readText(formData, "sortOrder")) || 0,
       variants: variants.length
         ? {

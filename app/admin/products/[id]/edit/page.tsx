@@ -107,7 +107,7 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
             <input name="slug" defaultValue={product.slug} />
           </label>
           <label>
-            <span>SKU</span>
+            <span>型号</span>
             <input name="sku" defaultValue={product.sku || ""} />
           </label>
           <label>

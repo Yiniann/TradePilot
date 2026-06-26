@@ -245,6 +245,20 @@ model ProductPriceTier {
   @@index([sortOrder])
 }
 
+model SiteVisit {
+  id        String   @id @default(uuid()) @db.Uuid
+  visitorId String
+  path      String
+  referrer  String?
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([visitorId])
+  @@index([path])
+  @@index([createdAt])
+}
+
 model InquiryMessage {
   id        String           @id @default(uuid()) @db.Uuid
   inquiryId String           @db.Uuid

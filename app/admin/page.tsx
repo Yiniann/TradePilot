@@ -1,10 +1,12 @@
 import Link from "next/link";
 import {
+  BarChart3,
   Inbox,
   Package,
   PackageCheck,
   PackagePlus,
-  UsersRound
+  UsersRound,
+  Waypoints
 } from "lucide-react";
 import { CustomerTable } from "@/components/customer-table";
 import { MetricCard } from "@/components/metric-card";
@@ -26,7 +28,13 @@ const inquiryStatusLabels = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
+  const todayStart = getStartOfToday();
+  const sevenDaysStart = getStartOfSevenDays();
   const [
+    todayPageViews,
+    todayUniqueVisitors,
+    sevenDayPageViews,
+    sevenDayUniqueVisitors,
     totalProducts,
     publishedProducts,
     draftProducts,
@@ -36,6 +44,36 @@ export default async function AdminDashboardPage() {
     recentProducts,
     recentInquiries
   ] = await Promise.all([
+    prisma.siteVisit.count({
+      where: {
+        createdAt: {
+          gte: todayStart
+        }
+      }
+    }),
+    prisma.siteVisit.groupBy({
+      by: ["visitorId"],
+      where: {
+        createdAt: {
+          gte: todayStart
+        }
+      }
+    }),
+    prisma.siteVisit.count({
+      where: {
+        createdAt: {
+          gte: sevenDaysStart
+        }
+      }
+    }),
+    prisma.siteVisit.groupBy({
+      by: ["visitorId"],
+      where: {
+        createdAt: {
+          gte: sevenDaysStart
+        }
+      }
+    }),
     prisma.product.count(),
     prisma.product.count({ where: { status: "PUBLISHED" } }),
     prisma.product.count({ where: { status: "DRAFT" } }),
@@ -72,10 +110,32 @@ export default async function AdminDashboardPage() {
       }
     })
   ]);
+  const conversionRate =
+    sevenDayUniqueVisitors.length > 0
+      ? `${((newInquiries / sevenDayUniqueVisitors.length) * 100).toFixed(1)}%`
+      : "0%";
 
   return (
     <main className="admin-content">
-      <section className="metrics-grid" aria-label="站点核心指标">
+      <section className="metrics-grid" aria-label="站点访问数据">
+        <MetricCard
+          icon={BarChart3}
+          label="今日访问量"
+          value={String(todayPageViews)}
+          trend="PV"
+        />
+        <MetricCard
+          icon={UsersRound}
+          label="今日访客"
+          value={String(todayUniqueVisitors.length)}
+          trend="UV"
+        />
+        <MetricCard
+          icon={Waypoints}
+          label="7日访问量"
+          value={String(sevenDayPageViews)}
+          trend={`${sevenDayUniqueVisitors.length} UV`}
+        />
         <MetricCard
           icon={PackageCheck}
           label="已上架产品"
@@ -90,16 +150,69 @@ export default async function AdminDashboardPage() {
         />
         <MetricCard
           icon={Inbox}
-          label="新询盘"
-          value={String(newInquiries)}
-          trend="来自产品详情页"
+          label="询盘转化"
+          value={conversionRate}
+          trend={`${newInquiries} 个新询盘 / 7日UV`}
         />
-        <MetricCard
-          icon={UsersRound}
-          label="客户档案"
-          value={String(totalCustomers)}
-          trend="询盘与手动录入"
-        />
+      </section>
+
+      <section className="dashboard-grid dashboard-grid-even">
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Inquiry Queue</p>
+              <h2>最新询盘</h2>
+            </div>
+            <Link className="quiet-button" href="/admin/inquiries">
+              查看全部
+            </Link>
+          </div>
+          {recentInquiries.length > 0 ? (
+            <div className="queue-list">
+              {recentInquiries.map((inquiry) => (
+                <article key={inquiry.id}>
+                  <div>
+                    <strong>{inquiry.subject}</strong>
+                    <span>
+                      {inquiry.customer?.name || "未关联客户"} ·{" "}
+                      {inquiry.product?.name || "未关联产品"} · {formatDate(inquiry.receivedAt)}
+                    </span>
+                  </div>
+                  <span className={`status-badge inquiry-${inquiry.status.toLowerCase()}`}>
+                    {inquiryStatusLabels[inquiry.status]}
+                  </span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="catalog-empty compact-empty">
+              <Inbox size={30} />
+              <h2>暂无询盘</h2>
+              <p>客户从产品详情提交询盘后，会出现在这里。</p>
+            </div>
+          )}
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Customers</p>
+              <h2>近期客户</h2>
+            </div>
+            <Link className="quiet-button" href="/admin/customers">
+              查看全部
+            </Link>
+          </div>
+          {totalCustomers > 0 ? (
+            <CustomerTable limit={5} />
+          ) : (
+            <div className="catalog-empty compact-empty">
+              <UsersRound size={30} />
+              <h2>暂无客户</h2>
+              <p>收到询盘或手动新建客户后，会显示在这里。</p>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="dashboard-grid">
@@ -166,55 +279,6 @@ export default async function AdminDashboardPage() {
           )}
         </aside>
       </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Inquiry Queue</p>
-            <h2>最新询盘</h2>
-          </div>
-          <Link className="quiet-button" href="/admin/inquiries">
-            查看全部
-          </Link>
-        </div>
-        {recentInquiries.length > 0 ? (
-          <div className="queue-list">
-            {recentInquiries.map((inquiry) => (
-              <article key={inquiry.id}>
-                <div>
-                  <strong>{inquiry.subject}</strong>
-                  <span>
-                    {inquiry.customer?.name || "未关联客户"} ·{" "}
-                    {inquiry.product?.name || "未关联产品"} · {formatDate(inquiry.receivedAt)}
-                  </span>
-                </div>
-                <span className={`status-badge inquiry-${inquiry.status.toLowerCase()}`}>
-                  {inquiryStatusLabels[inquiry.status]}
-                </span>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="catalog-empty compact-empty">
-            <Inbox size={30} />
-            <h2>暂无询盘</h2>
-            <p>客户从产品详情提交询盘后，会出现在这里。</p>
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Customers</p>
-            <h2>近期客户</h2>
-          </div>
-          <Link className="quiet-button" href="/admin/customers">
-            查看全部
-          </Link>
-        </div>
-        <CustomerTable limit={5} />
-      </section>
     </main>
   );
 }
@@ -243,4 +307,16 @@ function formatDate(date: Date) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
+}
+
+function getStartOfToday() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getStartOfSevenDays() {
+  const date = getStartOfToday();
+  date.setDate(date.getDate() - 6);
+  return date;
 }

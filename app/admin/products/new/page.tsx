@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createProduct } from "../actions";
+import { ProductMainImagesUploader } from "@/components/product-main-images-uploader";
 import { ProductRichTextEditor } from "@/components/product-rich-text-editor";
 import { ProductVariantsBuilder } from "@/components/product-variants-builder";
 import { requireCurrentUser } from "@/lib/auth";
@@ -42,16 +43,16 @@ export default async function NewProductPage() {
           </div>
         </div>
         <form action={createProduct} className="product-form">
-          <label>
+          <div className="product-form-full product-form-section">
+            <span>产品主图</span>
+            <ProductMainImagesUploader />
+          </div>
+          <label className="product-form-full">
             <span>产品名称</span>
             <input name="name" required />
           </label>
           <label>
-            <span>链接标识</span>
-            <input name="slug" placeholder="留空自动生成" />
-          </label>
-          <label>
-            <span>SKU</span>
+            <span>型号</span>
             <input name="sku" />
           </label>
           <label>
@@ -80,10 +81,6 @@ export default async function NewProductPage() {
           <label>
             <span>排序</span>
             <input name="sortOrder" type="number" defaultValue="0" />
-          </label>
-          <label className="product-form-wide">
-            <span>主图</span>
-            <input accept="image/*" name="coverImage" required type="file" />
           </label>
           <label className="product-form-wide">
             <span>摘要</span>
