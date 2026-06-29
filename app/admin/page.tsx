@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 import { CustomerTable } from "@/components/customer-table";
 import { MetricCard } from "@/components/metric-card";
+import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { canViewOwnDataOnly } from "@/lib/permissions";
 
 const productStatusLabels = {
   DRAFT: "草稿",
@@ -28,8 +30,10 @@ const inquiryStatusLabels = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
+  const user = await requireCurrentUser();
   const todayStart = getStartOfToday();
   const sevenDaysStart = getStartOfSevenDays();
+  const ownerWhere = canViewOwnDataOnly(user.role) ? { ownerId: user.id } : {};
   const [
     todayPageViews,
     todayUniqueVisitors,
@@ -77,8 +81,8 @@ export default async function AdminDashboardPage() {
     prisma.product.count(),
     prisma.product.count({ where: { status: "PUBLISHED" } }),
     prisma.product.count({ where: { status: "DRAFT" } }),
-    prisma.inquiry.count({ where: { status: "NEW" } }),
-    prisma.customer.count({ where: { deletedAt: null } }),
+    prisma.inquiry.count({ where: { ...ownerWhere, status: "NEW" } }),
+    prisma.customer.count({ where: { ...ownerWhere, deletedAt: null } }),
     prisma.product.findMany({
       where: {
         OR: [
@@ -102,6 +106,7 @@ export default async function AdminDashboardPage() {
       }
     }),
     prisma.inquiry.findMany({
+      where: ownerWhere,
       orderBy: { receivedAt: "desc" },
       take: 5,
       include: {
@@ -244,7 +249,7 @@ export default async function AdminDashboardPage() {
             <div className="catalog-empty compact-empty">
               <PackageCheck size={30} />
               <h2>产品资料完整</h2>
-              <p>当前产品都有主图、详情内容和 SKU。</p>
+              <p>当前产品都有主图、详情内容和规格。</p>
             </div>
           )}
         </div>
@@ -264,7 +269,7 @@ export default async function AdminDashboardPage() {
                   <div>
                     <strong>{product.name}</strong>
                     <p>{product.category?.name || "未分类"}</p>
-                    <span>{product.variants.length} 个 SKU</span>
+                    <span>{product.variants.length} 个规格</span>
                     <small>{formatDate(product.updatedAt)}</small>
                   </div>
                 </article>

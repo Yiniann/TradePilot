@@ -35,6 +35,12 @@ const pageTitles = [
     title: "新建客户"
   },
   {
+    match: (pathname: string) =>
+      pathname.startsWith("/admin/customers/") && pathname !== "/admin/customers/new",
+    eyebrow: "Customers",
+    title: "客户卡片"
+  },
+  {
     match: (pathname: string) => pathname === "/admin/customers",
     eyebrow: "Customers",
     title: "客户管理"
@@ -43,6 +49,11 @@ const pageTitles = [
     match: (pathname: string) => pathname === "/admin/settings",
     eyebrow: "Settings",
     title: "设置"
+  },
+  {
+    match: (pathname: string) => pathname === "/admin/settings/inquiry-assignment",
+    eyebrow: "Settings",
+    title: "询盘分配设置"
   },
   {
     match: (pathname: string) => pathname === "/admin/users",

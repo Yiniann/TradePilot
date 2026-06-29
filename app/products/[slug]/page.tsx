@@ -46,6 +46,7 @@ export default async function ProductDetailPage({
 
   const variants = product.variants.map((variant) => ({
     id: variant.id,
+    image: variant.image,
     name: variant.name,
     sku: variant.sku,
     priceTiers: variant.priceTiers.map((tier) => ({
@@ -56,6 +57,17 @@ export default async function ProductDetailPage({
       currency: tier.currency
     }))
   }));
+  const productSpecs = [
+    ["品名", product.name],
+    ["型号", product.sku],
+    ["材料", product.material],
+    ["类型", product.productType],
+    ["应用", product.application],
+    ["包装", product.packaging],
+    ["大小", product.size],
+    ["重量", product.weight],
+    ["成分", product.composition]
+  ].filter((spec): spec is [string, string] => Boolean(spec[1]));
 
   return (
     <main className="site-shell">
@@ -85,6 +97,12 @@ export default async function ProductDetailPage({
           )}
         </div>
 
+        {product.videoUrl ? (
+          <div className="product-detail-video">
+            <video controls preload="metadata" src={product.videoUrl} />
+          </div>
+        ) : null}
+
         <div className="product-detail-copy">
           <p className="eyebrow">
             {product.category?.name || "Product"}
@@ -93,6 +111,16 @@ export default async function ProductDetailPage({
           <h1>{product.name}</h1>
           <p>{product.summary || "欢迎提交询盘，我们会带着产品上下文处理需求。"}</p>
           {product.priceNote ? <strong>{product.priceNote}</strong> : null}
+          {productSpecs.length > 0 ? (
+            <div className="product-spec-table">
+              {productSpecs.map(([label, value]) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+          ) : null}
           {product.detailHtml ? (
             <div
               className="product-description rich-content"

@@ -1,5 +1,8 @@
-import { Mail, Phone } from "lucide-react";
+import Link from "next/link";
+import { Mail, MessageSquare, Phone, UserRound } from "lucide-react";
+import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { canViewOwnDataOnly } from "@/lib/permissions";
 
 const customerStageLabels = {
   NEW: "新客户",
@@ -22,10 +25,13 @@ type CustomerTableProps = {
 };
 
 export async function CustomerTable({ limit }: CustomerTableProps) {
+  const user = await requireCurrentUser();
+  const customerWhere = {
+    deletedAt: null,
+    ...(canViewOwnDataOnly(user.role) ? { ownerId: user.id } : {})
+  };
   const customers = await prisma.customer.findMany({
-    where: {
-      deletedAt: null
-    },
+    where: customerWhere,
     include: {
       contacts: {
         where: {
@@ -35,8 +41,15 @@ export async function CustomerTable({ limit }: CustomerTableProps) {
         take: 1
       },
       owner: true,
+      inquiries: {
+        orderBy: {
+          receivedAt: "desc"
+        },
+        take: 1
+      },
       _count: {
         select: {
+          contacts: true,
           inquiries: true
         }
       }
@@ -57,61 +70,73 @@ export async function CustomerTable({ limit }: CustomerTableProps) {
   }
 
   return (
-    <div className="table-wrap">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>客户</th>
-            <th>国家/来源</th>
-            <th>阶段</th>
-            <th>负责人</th>
-            <th>询盘</th>
-            <th>创建时间</th>
-          </tr>
-        </thead>
-        <tbody>
-          {customers.map((customer) => {
-            const contact = customer.contacts[0];
+    <div className="customer-list">
+      <div className="customer-list-header">
+        <span>客户</span>
+        <span>阶段/来源</span>
+        <span>最近询盘</span>
+        <span>负责人</span>
+        <span>创建时间</span>
+      </div>
+      {customers.map((customer) => {
+        const contact = customer.contacts[0];
+        const latestInquiry = customer.inquiries[0];
 
-            return (
-              <tr key={customer.id}>
-                <td>
-                  <div className="entity-cell">
-                    <strong>{customer.name}</strong>
-                    <span>{contact?.name || "未填写联系人"}</span>
-                    {contact?.email ? (
-                      <span className="contact-line">
-                        <Mail size={14} />
-                        {contact.email}
-                      </span>
-                    ) : null}
-                    {contact?.phone ? (
-                      <span className="contact-line">
-                        <Phone size={14} />
-                        {contact.phone}
-                      </span>
-                    ) : null}
-                  </div>
-                </td>
-                <td>
-                  <div className="muted-stack">
-                    <span>{customer.country || "未填写"}</span>
-                    <small>{customerSourceLabels[customer.source]}</small>
-                  </div>
-                </td>
-                <td>
-                  <span className={`status-badge stage-${customer.stage.toLowerCase()}`}>
-                    {customerStageLabels[customer.stage]}
+        return (
+          <Link
+            className="customer-list-row"
+            href={`/admin/customers/${customer.id}`}
+            key={customer.id}
+          >
+            <div className="entity-cell">
+              <strong>{customer.name}</strong>
+              <span>{customer.country || "未填写国家/地区"}</span>
+              <div className="customer-contact-lines">
+                {contact?.name ? (
+                  <span className="contact-line">
+                    <UserRound size={14} />
+                    {contact.name}
                   </span>
-                </td>
-                <td>{customer.owner?.name || "未分配"}</td>
-                <td>{customer._count.inquiries}</td>
-                <td>{formatDate(customer.createdAt)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                ) : null}
+                {contact?.email ? (
+                  <span className="contact-line">
+                    <Mail size={14} />
+                    {contact.email}
+                  </span>
+                ) : null}
+                {contact?.phone ? (
+                  <span className="contact-line">
+                    <Phone size={14} />
+                    {contact.phone}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="muted-stack">
+              <span className={`status-badge stage-${customer.stage.toLowerCase()}`}>
+                {customerStageLabels[customer.stage]}
+              </span>
+              <small>{customerSourceLabels[customer.source]}</small>
+            </div>
+            <div className="muted-stack">
+              <span className="contact-line">
+                <MessageSquare size={14} />
+                {customer._count.inquiries} 条询盘
+              </span>
+              <small>
+                {latestInquiry
+                  ? `${formatDate(latestInquiry.receivedAt)} / ${latestInquiry.subject}`
+                  : "暂无询盘"}
+              </small>
+            </div>
+            <div className="muted-stack">
+              <span>{customer.owner?.name || "未分配"}</span>
+              <small>{customer._count.contacts} 个联系人</small>
+            </div>
+            <span className="muted-text">{formatDate(customer.createdAt)}</span>
+          </Link>
+        );
+      })}
     </div>
   );
 }

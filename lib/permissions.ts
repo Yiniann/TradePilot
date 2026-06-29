@@ -4,7 +4,7 @@ export const roleLabels: Record<UserRole, string> = {
   SUPER_ADMIN: "超级管理员",
   ADMIN: "管理员",
   SALES: "销售",
-  VIEWER: "只读"
+  VIEWER: "销售"
 };
 
 export const userStatusLabels: Record<UserStatus, string> = {
@@ -13,7 +13,25 @@ export const userStatusLabels: Record<UserStatus, string> = {
 };
 
 export function canCreateCustomer(role: UserRole) {
-  return role !== "VIEWER";
+  void role;
+  return true;
+}
+
+export function canReplyInquiry(role: UserRole) {
+  void role;
+  return true;
+}
+
+export function canAssignInquiry(role: UserRole) {
+  return role === "SUPER_ADMIN" || role === "ADMIN";
+}
+
+export function canManageInquiryAssignmentSettings(role: UserRole) {
+  return canAssignInquiry(role);
+}
+
+export function canViewOwnDataOnly(role: UserRole) {
+  return role === "SALES" || role === "VIEWER";
 }
 
 export function canManageUsers(role: UserRole) {
@@ -24,13 +42,17 @@ export function canManageProducts(role: UserRole) {
   return role === "SUPER_ADMIN" || role === "ADMIN";
 }
 
+export function canManageSystemSettings(role: UserRole) {
+  return role === "SUPER_ADMIN";
+}
+
 export function manageableRolesFor(actorRole: UserRole): UserRole[] {
   if (actorRole === "SUPER_ADMIN") {
-    return ["SUPER_ADMIN", "ADMIN", "SALES", "VIEWER"];
+    return ["SUPER_ADMIN", "ADMIN", "SALES"];
   }
 
   if (actorRole === "ADMIN") {
-    return ["SALES", "VIEWER"];
+    return ["SALES"];
   }
 
   return [];

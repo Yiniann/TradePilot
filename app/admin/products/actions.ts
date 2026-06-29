@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canManageProducts } from "@/lib/permissions";
-import { saveProductImage } from "@/lib/product-images";
+import { saveProductImage, saveProductVideo } from "@/lib/product-images";
 
 const productStatuses: ProductStatus[] = ["DRAFT", "PUBLISHED", "ARCHIVED"];
 
@@ -189,19 +189,55 @@ function readVariants(formData: FormData) {
 }
 
 async function saveMainImages(formData: FormData) {
-  const images = formData
-    .getAll("mainImages")
-    .filter((image): image is File => image instanceof File && image.size > 0)
-    .slice(0, 6);
+  const images = formData.getAll("mainImages");
+  const existingImages = formData.getAll("existingMainImages").map((image) => String(image));
+  const imageUrls: string[] = [];
 
-  const imageUrls = [];
+  for (let index = 0; index < 6; index += 1) {
+    const image = images[index];
 
-  for (const image of images) {
-    const imageUrl = await saveProductImage(image);
+    if (image instanceof File && image.size > 0) {
+      const imageUrl = await saveProductImage(image);
 
-    if (imageUrl) {
-      imageUrls.push(imageUrl);
+      if (imageUrl) {
+        imageUrls.push(imageUrl);
+      }
+
+      continue;
     }
+
+    if (existingImages[index]) {
+      imageUrls.push(existingImages[index]);
+    }
+  }
+
+  return imageUrls;
+}
+
+async function saveProductVideoField(formData: FormData) {
+  const video = formData.get("productVideo");
+
+  if (video instanceof File && video.size > 0) {
+    return saveProductVideo(video);
+  }
+
+  return readText(formData, "existingProductVideo") || null;
+}
+
+async function saveVariantImages(formData: FormData, variantIndexes: number[]) {
+  const images = formData.getAll("variantImages");
+  const existingImages = formData.getAll("variantExistingImages").map((image) => String(image));
+  const imageUrls: Record<number, string | null> = {};
+
+  for (const index of variantIndexes) {
+    const image = images[index];
+
+    if (image instanceof File && image.size > 0) {
+      imageUrls[index] = await saveProductImage(image);
+      continue;
+    }
+
+    imageUrls[index] = existingImages[index] || null;
   }
 
   return imageUrls;
@@ -222,7 +258,12 @@ export async function createProduct(formData: FormData) {
   const mainImages = await saveMainImages(formData);
   const legacyCoverImage = cover instanceof File ? await saveProductImage(cover) : null;
   const coverImage = mainImages[0] ?? legacyCoverImage;
+  const videoUrl = await saveProductVideoField(formData);
   const variants = readVariants(formData);
+  const variantImages = await saveVariantImages(
+    formData,
+    variants.map((variant) => variant.sortOrder)
+  );
 
   await prisma.product.create({
     data: {
@@ -231,16 +272,23 @@ export async function createProduct(formData: FormData) {
       categoryId,
       sku: readText(formData, "sku") || null,
       summary: readText(formData, "summary") || null,
-      description: readText(formData, "description") || null,
+      material: readText(formData, "material") || null,
+      productType: readText(formData, "productType") || null,
+      application: readText(formData, "application") || null,
+      packaging: readText(formData, "packaging") || null,
+      size: readText(formData, "size") || null,
+      weight: readText(formData, "weight") || null,
+      composition: readText(formData, "composition") || null,
       detailHtml: sanitizeProductHtml(readText(formData, "detailHtml")) || null,
       priceNote: readText(formData, "priceNote") || null,
-      status: readStatus(formData),
+      status: "PUBLISHED",
       coverImage,
       gallery: mainImages,
-      sortOrder: Number(readText(formData, "sortOrder")) || 0,
+      videoUrl,
       variants: variants.length
         ? {
             create: variants.map((variant) => ({
+              image: variantImages[variant.sortOrder] ?? null,
               name: variant.name,
               sku: variant.sku,
               sortOrder: variant.sortOrder,
@@ -276,7 +324,8 @@ export async function updateProduct(formData: FormData) {
     select: {
       id: true,
       slug: true,
-      coverImage: true
+      coverImage: true,
+      gallery: true
     }
   });
 
@@ -289,7 +338,16 @@ export async function updateProduct(formData: FormData) {
   const categoryId = await resolveCategoryId(formData);
   const cover = formData.get("coverImage");
   const uploadedCoverImage = cover instanceof File ? await saveProductImage(cover) : null;
+  const mainImages = await saveMainImages(formData);
+  const hasMainImageFields = formData.has("existingMainImages") || formData.has("mainImages");
+  const gallery = hasMainImageFields ? mainImages : existingProduct.gallery;
+  const coverImage = gallery[0] ?? uploadedCoverImage ?? (hasMainImageFields ? null : existingProduct.coverImage);
+  const videoUrl = await saveProductVideoField(formData);
   const variants = readVariants(formData);
+  const variantImages = await saveVariantImages(
+    formData,
+    variants.map((variant) => variant.sortOrder)
+  );
 
   await prisma.$transaction(async (tx) => {
     await tx.productVariant.deleteMany({
@@ -308,15 +366,22 @@ export async function updateProduct(formData: FormData) {
         categoryId,
         sku: readText(formData, "sku") || null,
         summary: readText(formData, "summary") || null,
-        description: readText(formData, "description") || null,
+        material: readText(formData, "material") || null,
+        productType: readText(formData, "productType") || null,
+        application: readText(formData, "application") || null,
+        packaging: readText(formData, "packaging") || null,
+        size: readText(formData, "size") || null,
+        weight: readText(formData, "weight") || null,
+        composition: readText(formData, "composition") || null,
         detailHtml: sanitizeProductHtml(readText(formData, "detailHtml")) || null,
         priceNote: readText(formData, "priceNote") || null,
-        status: readStatus(formData),
-        coverImage: uploadedCoverImage || existingProduct.coverImage,
-        sortOrder: Number(readText(formData, "sortOrder")) || 0,
+        coverImage,
+        gallery,
+        videoUrl,
         variants: variants.length
           ? {
               create: variants.map((variant) => ({
+                image: variantImages[variant.sortOrder] ?? null,
                 name: variant.name,
                 sku: variant.sku,
                 sortOrder: variant.sortOrder,

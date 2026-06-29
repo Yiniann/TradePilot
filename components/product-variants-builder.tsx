@@ -1,16 +1,17 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ImagePlus, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-type PriceTierDraft = {
+export type PriceTierDraft = {
   minQuantity: string;
   maxQuantity: string;
   unitPrice: string;
   currency: string;
 };
 
-type VariantDraft = {
+export type VariantDraft = {
+  image: string;
   name: string;
   sku: string;
   priceTiers: PriceTierDraft[];
@@ -31,6 +32,7 @@ function createPriceTier(): PriceTierDraft {
 
 function createVariant(index: number): VariantDraft {
   return {
+    image: "",
     name: index === 0 ? "默认规格" : "",
     sku: "",
     priceTiers: [createPriceTier()]
@@ -38,16 +40,76 @@ function createVariant(index: number): VariantDraft {
 }
 
 export function ProductVariantsBuilder({ initialVariants }: ProductVariantsBuilderProps) {
+  const imageInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const [variants, setVariants] = useState<VariantDraft[]>(
     initialVariants?.length ? initialVariants : [createVariant(0)]
   );
-  const variantsJson = useMemo(() => JSON.stringify(variants), [variants]);
+  const initialVariantsKey = JSON.stringify(initialVariants ?? []);
+  const variantsJson = useMemo(
+    () =>
+      JSON.stringify(
+        variants.map((variant) => ({
+          name: variant.name,
+          sku: variant.sku,
+          priceTiers: variant.priceTiers
+        }))
+      ),
+    [variants]
+  );
 
-  function updateVariant(index: number, key: keyof VariantDraft, value: string) {
+  useEffect(() => {
+    setVariants(initialVariants?.length ? initialVariants : [createVariant(0)]);
+  }, [initialVariants, initialVariantsKey]);
+
+  function updateVariant(index: number, key: "name" | "sku", value: string) {
     setVariants((current) =>
       current.map((variant, variantIndex) =>
         variantIndex === index ? { ...variant, [key]: value } : variant
       )
+    );
+  }
+
+  function updateVariantImage(index: number, file?: File) {
+    setVariants((current) =>
+      current.map((variant, variantIndex) => {
+        if (variantIndex !== index) {
+          return variant;
+        }
+
+        if (variant.image.startsWith("blob:")) {
+          URL.revokeObjectURL(variant.image);
+        }
+
+        return {
+          ...variant,
+          image: file ? URL.createObjectURL(file) : variant.image
+        };
+      })
+    );
+  }
+
+  function clearVariantImage(index: number) {
+    const input = imageInputRefs.current[index];
+
+    if (input) {
+      input.value = "";
+    }
+
+    setVariants((current) =>
+      current.map((variant, variantIndex) => {
+        if (variantIndex !== index) {
+          return variant;
+        }
+
+        if (variant.image.startsWith("blob:")) {
+          URL.revokeObjectURL(variant.image);
+        }
+
+        return {
+          ...variant,
+          image: ""
+        };
+      })
     );
   }
 
@@ -104,7 +166,7 @@ export function ProductVariantsBuilder({ initialVariants }: ProductVariantsBuild
       {variants.map((variant, variantIndex) => (
         <div className="variant-card" key={variantIndex}>
           <div className="variant-card-header">
-            <strong>SKU {variantIndex + 1}</strong>
+            <strong>规格 {variantIndex + 1}</strong>
             <button
               className="icon-button"
               disabled={variants.length === 1}
@@ -113,29 +175,74 @@ export function ProductVariantsBuilder({ initialVariants }: ProductVariantsBuild
                   current.filter((_, currentIndex) => currentIndex !== variantIndex)
                 )
               }
-              title="删除 SKU"
+              title="删除规格"
               type="button"
             >
               <Trash2 size={16} />
             </button>
           </div>
           <div className="variant-fields">
-            <label>
-              <span>规格名称</span>
+            <div className="variant-image-field">
+              <span>规格图片</span>
               <input
-                onChange={(event) => updateVariant(variantIndex, "name", event.target.value)}
-                placeholder="如 Black / 500ml / Model A"
-                value={variant.name}
+                name="variantExistingImages"
+                type="hidden"
+                value={variant.image.startsWith("blob:") ? "" : variant.image}
               />
-            </label>
-            <label>
-              <span>SKU 编码</span>
               <input
-                onChange={(event) => updateVariant(variantIndex, "sku", event.target.value)}
-                placeholder="内部或客户可见编码"
-                value={variant.sku}
+                accept="image/*"
+                className="visually-hidden"
+                name="variantImages"
+                onChange={(event) => updateVariantImage(variantIndex, event.target.files?.[0])}
+                ref={(element) => {
+                  imageInputRefs.current[variantIndex] = element;
+                }}
+                type="file"
               />
-            </label>
+              <button
+                className="variant-image-picker"
+                onClick={() => imageInputRefs.current[variantIndex]?.click()}
+                type="button"
+              >
+                {variant.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt={`规格 ${variantIndex + 1} 图片`} src={variant.image} />
+                ) : (
+                  <span>
+                    <ImagePlus size={18} />
+                    添加图片
+                  </span>
+                )}
+              </button>
+              {variant.image ? (
+                <button
+                  className="variant-image-remove"
+                  onClick={() => clearVariantImage(variantIndex)}
+                  title="移除规格图片"
+                  type="button"
+                >
+                  <X size={14} />
+                </button>
+              ) : null}
+            </div>
+            <div className="variant-meta-fields">
+              <label>
+                <span>规格名称</span>
+                <input
+                  onChange={(event) => updateVariant(variantIndex, "name", event.target.value)}
+                  placeholder="如 Black / 500ml / Model A"
+                  value={variant.name}
+                />
+              </label>
+              <label>
+                <span>型号 / 编码</span>
+                <input
+                  onChange={(event) => updateVariant(variantIndex, "sku", event.target.value)}
+                  placeholder="如 Model A / SKU-001"
+                  value={variant.sku}
+                />
+              </label>
+            </div>
           </div>
           <div className="price-tier-list">
             {variant.priceTiers.map((tier, tierIndex) => (
@@ -208,7 +315,7 @@ export function ProductVariantsBuilder({ initialVariants }: ProductVariantsBuild
         type="button"
       >
         <Plus size={16} />
-        添加 SKU
+        添加规格
       </button>
     </div>
   );

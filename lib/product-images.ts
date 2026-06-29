@@ -23,3 +23,24 @@ export async function saveProductImage(file: File) {
 
   return `/uploads/products/${filename}`;
 }
+
+export async function saveProductVideo(file: File) {
+  if (!file || file.size === 0) {
+    return null;
+  }
+
+  if (!file.type.startsWith("video/")) {
+    return null;
+  }
+
+  await mkdir(uploadDir, { recursive: true });
+
+  const extension = extname(file.name).toLowerCase() || ".mp4";
+  const filename = `${Date.now()}-${crypto.randomUUID()}${extension}`;
+  const filePath = join(uploadDir, filename);
+  const bytes = await file.arrayBuffer();
+
+  await writeFile(filePath, Buffer.from(bytes));
+
+  return `/uploads/products/${filename}`;
+}

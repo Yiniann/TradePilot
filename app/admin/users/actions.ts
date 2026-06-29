@@ -12,7 +12,7 @@ import {
   canManageUsers
 } from "@/lib/permissions";
 
-const userRoles: UserRole[] = ["SUPER_ADMIN", "ADMIN", "SALES", "VIEWER"];
+const userRoles: UserRole[] = ["SUPER_ADMIN", "ADMIN", "SALES"];
 
 function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();

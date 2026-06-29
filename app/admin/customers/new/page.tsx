@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { createCustomer } from "../actions";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { canCreateCustomer, roleLabels } from "@/lib/permissions";
+import { canAssignInquiry, canCreateCustomer, roleLabels } from "@/lib/permissions";
 
 const customerStageLabels = {
   NEW: "新客户",
@@ -34,8 +34,9 @@ export default async function NewCustomerPage() {
   const owners = await prisma.user.findMany({
     where: {
       status: "ACTIVE",
+      ...(canAssignInquiry(user.role) ? {} : { id: user.id }),
       role: {
-        not: "VIEWER"
+        in: ["SUPER_ADMIN", "ADMIN", "SALES"]
       }
     },
     orderBy: [{ role: "asc" }, { createdAt: "asc" }]

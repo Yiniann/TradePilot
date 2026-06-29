@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { canCreateCustomer } from "@/lib/permissions";
+import { canAssignInquiry, canCreateCustomer } from "@/lib/permissions";
 
 const customerStages: CustomerStage[] = ["NEW", "CONTACTED", "QUOTED", "WON", "LOST"];
 const customerSources: CustomerSource[] = [
@@ -39,9 +39,27 @@ export async function createCustomer(formData: FormData) {
 
   const name = readText(formData, "name");
   const contactName = readText(formData, "contactName");
-  const ownerId = readText(formData, "ownerId");
+  const requestedOwnerId = readText(formData, "ownerId") || user.id;
+  const ownerId = canAssignInquiry(user.role) ? requestedOwnerId : user.id;
 
   if (!name) {
+    return;
+  }
+
+  const owner = await prisma.user.findFirst({
+    where: {
+      id: ownerId,
+      status: "ACTIVE",
+      role: {
+        in: ["SUPER_ADMIN", "ADMIN", "SALES"]
+      }
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (!owner) {
     return;
   }
 
@@ -53,7 +71,7 @@ export async function createCustomer(formData: FormData) {
       country: readText(formData, "country") || null,
       website: readText(formData, "website") || null,
       note: readText(formData, "note") || null,
-      ownerId: ownerId || user.id,
+      ownerId: owner.id,
       contacts: contactName
         ? {
             create: {

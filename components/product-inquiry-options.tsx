@@ -12,6 +12,7 @@ type ProductPriceTierView = {
 
 type ProductVariantView = {
   id: string;
+  image: string | null;
   name: string;
   sku: string | null;
   priceTiers: ProductPriceTierView[];
@@ -47,6 +48,7 @@ export function ProductInquiryOptions({ variants }: ProductInquiryOptionsProps) 
   return (
     <div className="product-option-box">
       <input name="selectedVariantId" type="hidden" value={selectedVariant.id} />
+      <input name="selectedVariantImage" type="hidden" value={selectedVariant.image ?? ""} />
       <input name="selectedVariantName" type="hidden" value={selectedVariant.name} />
       <input name="selectedVariantSku" type="hidden" value={selectedVariant.sku ?? ""} />
       <input name="selectedQuantity" type="hidden" value={quantity} />
@@ -55,8 +57,15 @@ export function ProductInquiryOptions({ variants }: ProductInquiryOptionsProps) 
         type="hidden"
         value={matchedTier ? `${matchedTier.currency} ${matchedTier.unitPrice}` : ""}
       />
+      {selectedVariant.image ? (
+        <div className="selected-variant-preview">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img alt={selectedVariant.name} src={selectedVariant.image} />
+          <span>{selectedVariant.name}</span>
+        </div>
+      ) : null}
       <label>
-        <span>选择 SKU</span>
+        <span>选择规格</span>
         <select value={variantId} onChange={(event) => setVariantId(event.target.value)}>
           {variants.map((variant) => (
             <option key={variant.id} value={variant.id}>
