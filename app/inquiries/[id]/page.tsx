@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 const inquiryStatusLabels = {
   NEW: "已提交",
   ASSIGNED: "处理中",
+  CUSTOMER_REPLIED: "等待业务回复",
   REPLIED: "已回复",
   CLOSED: "已结束"
 } as const;
@@ -47,9 +48,15 @@ export default async function PublicInquiryPage({ params }: PublicInquiryPagePro
       product: true,
       messages: {
         where: {
-          direction: {
-            in: ["INBOUND", "OUTBOUND"]
-          }
+          OR: [
+            {
+              direction: "INBOUND"
+            },
+            {
+              direction: "OUTBOUND",
+              deliveryStatus: "SENT"
+            }
+          ]
         },
         include: {
           author: true

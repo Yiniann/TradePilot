@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createInquiryAccessLink } from "@/lib/inquiry-access";
+import { createInquiryAccessLink, getAppUrl } from "@/lib/inquiry-access";
 import { sendTransactionalEmail } from "@/lib/email";
 import { getSiteSettings } from "@/lib/site-settings";
 import {
@@ -114,6 +114,7 @@ function renderEmail(input: {
   company: CompanyInfo;
   heading: string;
   salesContact?: SalesContact;
+  securityNote?: string;
   url: string;
 }) {
   const safeBody = escapeHtml(input.body).replaceAll("\n", "<br />");
@@ -132,7 +133,7 @@ function renderEmail(input: {
         <div style="font-size:14px;line-height:1.7;color:#52605d;margin-bottom:22px">${safeBody}</div>
         <a href="${escapeHtml(input.url)}" style="display:inline-block;background:#087f6b;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;border-radius:6px;padding:11px 18px">${escapeHtml(input.buttonLabel)}</a>
         ${salesBlock}
-        <div style="background:#f7f9f8;border-radius:6px;color:#7a8582;font-size:12px;line-height:1.6;margin-top:22px;padding:10px 12px">This secure link provides access to the inquiry for 90 days. Please do not forward it.</div>
+        ${input.securityNote ? `<div style="background:#f7f9f8;border-radius:6px;color:#7a8582;font-size:12px;line-height:1.6;margin-top:22px;padding:10px 12px">${escapeHtml(input.securityNote)}</div>` : ""}
         ${renderCompanyFooter(input.company)}
       </div>
     </div>
@@ -171,6 +172,7 @@ export async function sendInquiryConfirmationEmail(input: InquiryEmailInput) {
       buttonLabel: "View inquiry",
       company,
       heading: emailSubject,
+      securityNote: "This secure link provides access to the inquiry for 90 days. Please do not forward it.",
       url: access.url
     })
   });
@@ -214,7 +216,57 @@ export async function sendInquiryReplyEmail(input: InquiryEmailInput & {
       company,
       heading: emailSubject,
       salesContact: input.salesContact,
+      securityNote: "This secure link provides access to the inquiry for 90 days. Please do not forward it.",
       url: access.url
     })
   });
+}
+
+type TeamNotificationInput = {
+  contactName: string;
+  customerName: string;
+  event: "NEW_INQUIRY" | "CUSTOMER_REPLY";
+  inquiryId: string;
+  message: string;
+  subject: string;
+  to: string[];
+};
+
+export async function sendInquiryTeamNotificationEmail(
+  input: TeamNotificationInput
+) {
+  if (input.to.length === 0) {
+    return [];
+  }
+
+  const settings = await getSiteSettings();
+  const company = getCompanyInfo(settings);
+  const appUrl = await getAppUrl();
+  const inquiryUrl = new URL(`/admin/inquiries/${input.inquiryId}`, appUrl).toString();
+  const isCustomerReply = input.event === "CUSTOMER_REPLY";
+  const heading = isCustomerReply ? "客户有新回复" : "收到新的官网询盘";
+  const emailSubject = `${heading}：${input.subject}`;
+  const body = [
+    `${input.customerName} / ${input.contactName}`,
+    "",
+    input.message
+  ].join("\n");
+
+  return Promise.all(
+    [...new Set(input.to)].map((to) =>
+      sendTransactionalEmail({
+        to,
+        subject: emailSubject,
+        previewUrl: inquiryUrl,
+        text: `${body}\n\n打开询盘：${inquiryUrl}`,
+        html: renderEmail({
+          body,
+          buttonLabel: "打开询盘",
+          company,
+          heading,
+          url: inquiryUrl
+        })
+      })
+    )
+  );
 }

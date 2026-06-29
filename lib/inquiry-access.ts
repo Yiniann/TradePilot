@@ -13,9 +13,20 @@ function hashAccessToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-async function getAppUrl() {
+export async function getAppUrl() {
   const settings = await getSiteSettings();
-  return (settings?.appUrl || "http://localhost:3000").replace(/\/$/, "");
+  const value = (settings?.appUrl || "http://localhost:3000").replace(/\/$/, "");
+
+  try {
+    const url = new URL(value);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.toString().replace(/\/$/, "");
+    }
+  } catch {
+    // Fall back to the local URL so one bad setting cannot break inquiry intake.
+  }
+
+  return "http://localhost:3000";
 }
 
 export async function createInquiryAccessLink(inquiryId: string) {

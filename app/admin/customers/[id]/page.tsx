@@ -6,11 +6,18 @@ import {
   Globe,
   Mail,
   MessageSquare,
-  Phone
+  Phone,
+  Save
 } from "lucide-react";
+import { updateCustomer } from "../actions";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { canViewOwnDataOnly } from "@/lib/permissions";
+import {
+  canAssignInquiry,
+  canCreateCustomer,
+  canViewOwnDataOnly,
+  roleLabels
+} from "@/lib/permissions";
 
 const customerStageLabels = {
   NEW: "新客户",
@@ -31,6 +38,7 @@ const customerSourceLabels = {
 const inquiryStatusLabels = {
   NEW: "新询盘",
   ASSIGNED: "已分配",
+  CUSTOMER_REPLIED: "客户新回复",
   REPLIED: "已回复",
   CLOSED: "已关闭"
 } as const;
@@ -45,14 +53,20 @@ type CustomerDetailPageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams: Promise<{
+    saved?: string;
+  }>;
 };
 
 export const dynamic = "force-dynamic";
 
-export default async function CustomerDetailPage({ params }: CustomerDetailPageProps) {
+export default async function CustomerDetailPage({
+  params,
+  searchParams
+}: CustomerDetailPageProps) {
   const user = await requireCurrentUser();
-  const { id } = await params;
-  const customer = await prisma.customer.findFirst({
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const [customer, owners] = await Promise.all([prisma.customer.findFirst({
     where: {
       deletedAt: null,
       id,
@@ -86,7 +100,16 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
       },
       owner: true
     }
-  });
+  }), prisma.user.findMany({
+    where: {
+      status: "ACTIVE",
+      ...(canAssignInquiry(user.role) ? {} : { id: user.id }),
+      role: {
+        in: ["SUPER_ADMIN", "ADMIN", "SALES"]
+      }
+    },
+    orderBy: [{ role: "asc" }, { createdAt: "asc" }]
+  })]);
 
   if (!customer) {
     notFound();
@@ -102,7 +125,8 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
     )
     .sort((first, second) => second.createdAt.getTime() - first.createdAt.getTime())
     .slice(0, 8);
-  const primaryContact = customer.contacts.find((contact) => contact.isPrimary);
+  const primaryContact =
+    customer.contacts.find((contact) => contact.isPrimary) || customer.contacts[0];
 
   return (
     <main className="admin-content">
@@ -118,6 +142,8 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
           </Link>
         </div>
       </section>
+
+      {query.saved === "1" ? <p className="success-note">客户资料已保存。</p> : null}
 
       <section className="customer-profile-hero panel">
         <div>
@@ -238,6 +264,70 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageP
         </div>
 
         <aside className="customer-detail-sidebar">
+          {canCreateCustomer(user.role) ? (
+            <section className="panel customer-sidebar-panel">
+              <div className="panel-header">
+                <div>
+                  <p className="eyebrow">Maintain</p>
+                  <h2>维护客户资料</h2>
+                </div>
+              </div>
+              <form action={updateCustomer} className="customer-maintain-form">
+                <input name="customerId" type="hidden" value={customer.id} />
+                <label>
+                  <span>公司名称</span>
+                  <input defaultValue={customer.name} name="name" required />
+                </label>
+                <label>
+                  <span>客户阶段</span>
+                  <select defaultValue={customer.stage} name="stage">
+                    {Object.entries(customerStageLabels).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>负责人</span>
+                  <select defaultValue={customer.ownerId || ""} name="ownerId" required>
+                    <option disabled value="">选择负责人</option>
+                    {owners.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.name} / {roleLabels[owner.role]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>国家/地区</span>
+                  <input defaultValue={customer.country || ""} name="country" />
+                </label>
+                <label>
+                  <span>网站</span>
+                  <input defaultValue={customer.website || ""} name="website" type="url" />
+                </label>
+                <label>
+                  <span>主联系人</span>
+                  <input defaultValue={primaryContact?.name || ""} name="contactName" />
+                </label>
+                <label>
+                  <span>邮箱</span>
+                  <input defaultValue={primaryContact?.email || ""} name="email" type="email" />
+                </label>
+                <label>
+                  <span>电话</span>
+                  <input defaultValue={primaryContact?.phone || ""} name="phone" />
+                </label>
+                <label>
+                  <span>客户备注</span>
+                  <textarea defaultValue={customer.note || ""} name="note" rows={4} />
+                </label>
+                <button className="primary-button" type="submit">
+                  <Save size={16} />
+                  保存资料
+                </button>
+              </form>
+            </section>
+          ) : null}
           <section className="panel customer-sidebar-panel">
             <div className="panel-header">
               <div>

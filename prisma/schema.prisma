@@ -37,6 +37,7 @@ enum CustomerSource {
 enum InquiryStatus {
   NEW
   ASSIGNED
+  CUSTOMER_REPLIED
   REPLIED
   CLOSED
 }
@@ -58,6 +59,13 @@ enum MessageDirection {
   INBOUND
   OUTBOUND
   INTERNAL_NOTE
+}
+
+enum MessageDeliveryStatus {
+  NOT_APPLICABLE
+  PENDING
+  SENT
+  FAILED
 }
 
 enum ProductStatus {
@@ -285,18 +293,22 @@ model SiteVisit {
 }
 
 model InquiryMessage {
-  id        String           @id @default(uuid()) @db.Uuid
-  inquiryId String           @db.Uuid
-  direction MessageDirection
-  body      String
-  authorId  String?          @db.Uuid
-  createdAt DateTime         @default(now())
+  id             String                @id @default(uuid()) @db.Uuid
+  inquiryId      String                @db.Uuid
+  direction      MessageDirection
+  body           String
+  authorId       String?               @db.Uuid
+  deliveryStatus MessageDeliveryStatus @default(NOT_APPLICABLE)
+  deliveryError  String?
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
 
   inquiry Inquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
   author  User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([inquiryId])
   @@index([authorId])
+  @@index([deliveryStatus])
   @@index([createdAt])
 }
 

@@ -4,7 +4,7 @@ export const roleLabels: Record<UserRole, string> = {
   SUPER_ADMIN: "超级管理员",
   ADMIN: "管理员",
   SALES: "销售",
-  VIEWER: "销售"
+  VIEWER: "只读"
 };
 
 export const userStatusLabels: Record<UserStatus, string> = {
@@ -13,13 +13,11 @@ export const userStatusLabels: Record<UserStatus, string> = {
 };
 
 export function canCreateCustomer(role: UserRole) {
-  void role;
-  return true;
+  return role !== "VIEWER";
 }
 
 export function canReplyInquiry(role: UserRole) {
-  void role;
-  return true;
+  return role !== "VIEWER";
 }
 
 export function canAssignInquiry(role: UserRole) {
@@ -31,7 +29,7 @@ export function canManageInquiryAssignmentSettings(role: UserRole) {
 }
 
 export function canViewOwnDataOnly(role: UserRole) {
-  return role === "SALES" || role === "VIEWER";
+  return role === "SALES";
 }
 
 export function canManageUsers(role: UserRole) {

@@ -22,13 +22,38 @@ const customerSourceLabels = {
 
 type CustomerTableProps = {
   limit?: number;
+  query?: string;
+  stage?: CustomerStage;
 };
 
-export async function CustomerTable({ limit }: CustomerTableProps) {
+export async function CustomerTable({ limit, query, stage }: CustomerTableProps) {
   const user = await requireCurrentUser();
-  const customerWhere = {
+  const keyword = query?.trim();
+  const customerWhere: Prisma.CustomerWhereInput = {
     deletedAt: null,
-    ...(canViewOwnDataOnly(user.role) ? { ownerId: user.id } : {})
+    ...(canViewOwnDataOnly(user.role) ? { ownerId: user.id } : {}),
+    ...(stage ? { stage } : {}),
+    ...(keyword
+      ? {
+          OR: [
+            { name: { contains: keyword, mode: "insensitive" } },
+            { country: { contains: keyword, mode: "insensitive" } },
+            { website: { contains: keyword, mode: "insensitive" } },
+            {
+              contacts: {
+                some: {
+                  deletedAt: null,
+                  OR: [
+                    { name: { contains: keyword, mode: "insensitive" } },
+                    { email: { contains: keyword, mode: "insensitive" } },
+                    { phone: { contains: keyword, mode: "insensitive" } }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      : {})
   };
   const customers = await prisma.customer.findMany({
     where: customerWhere,
@@ -55,7 +80,7 @@ export async function CustomerTable({ limit }: CustomerTableProps) {
       }
     },
     orderBy: {
-      createdAt: "desc"
+      updatedAt: "desc"
     },
     take: limit
   });
@@ -146,3 +171,4 @@ function formatDate(date: Date) {
     dateStyle: "medium"
   }).format(date);
 }
+import type { CustomerStage, Prisma } from "@prisma/client";

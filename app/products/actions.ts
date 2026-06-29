@@ -1,7 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { sendInquiryConfirmationEmail } from "@/lib/inquiry-email";
+import {
+  sendInquiryConfirmationEmail,
+  sendInquiryTeamNotificationEmail
+} from "@/lib/inquiry-email";
 import { prisma } from "@/lib/db";
 
 function readText(formData: FormData, key: string) {
@@ -12,9 +15,12 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+function isEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 export async function createProductInquiry(formData: FormData) {
   const productId = readText(formData, "productId");
-  const productSlug = readText(formData, "productSlug");
   const companyName = readText(formData, "companyName");
   const contactName = readText(formData, "contactName");
   const email = normalizeEmail(readText(formData, "email"));
@@ -26,7 +32,14 @@ export async function createProductInquiry(formData: FormData) {
   const selectedQuantity = readText(formData, "selectedQuantity");
   const selectedUnitPrice = readText(formData, "selectedUnitPrice");
 
-  if (!productId || !productSlug || !companyName || !contactName || !email || !message) {
+  if (
+    !productId ||
+    !companyName ||
+    !contactName ||
+    !isEmail(email) ||
+    !message ||
+    message.length > 5000
+  ) {
     return;
   }
 
@@ -37,7 +50,8 @@ export async function createProductInquiry(formData: FormData) {
     },
     select: {
       id: true,
-      name: true
+      name: true,
+      slug: true
     }
   });
 
@@ -58,6 +72,9 @@ export async function createProductInquiry(formData: FormData) {
     .join("\n");
 
   const { inquiry } = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${email}))`;
+    await tx.$queryRaw`SELECT "id" FROM "SiteSettings" WHERE "id" = 'default' FOR UPDATE`;
+
     const settings = await tx.siteSettings.findUnique({
       where: {
         id: "default"
@@ -94,7 +111,10 @@ export async function createProductInquiry(formData: FormData) {
     const existingContact = await tx.contact.findFirst({
       where: {
         deletedAt: null,
-        email,
+        email: {
+          equals: email,
+          mode: "insensitive"
+        },
         customer: {
           deletedAt: null
         }
@@ -106,9 +126,23 @@ export async function createProductInquiry(formData: FormData) {
         createdAt: "asc"
       }
     });
+    const inheritedOwner = existingContact?.customer.ownerId
+      ? await tx.user.findFirst({
+          where: {
+            id: existingContact.customer.ownerId,
+            status: "ACTIVE",
+            role: {
+              in: ["SUPER_ADMIN", "ADMIN", "SALES"]
+            }
+          },
+          select: {
+            id: true
+          }
+        })
+      : null;
 
     if (
-      !existingContact?.customer.ownerId &&
+      !inheritedOwner &&
       settings?.inquiryAssignmentMode === "ROUND_ROBIN" &&
       settings.inquiryAssignableOwnerIds.length > 0
     ) {
@@ -180,15 +214,30 @@ export async function createProductInquiry(formData: FormData) {
         });
 
     const customerId = existingContact?.customerId || contact.customerId;
-    const ownerId = existingContact?.customer.ownerId || defaultOwnerId;
+    const ownerId = inheritedOwner?.id || defaultOwnerId;
 
-    if (ownerId && existingContact && !existingContact.customer.ownerId) {
+    if (
+      ownerId &&
+      existingContact &&
+      existingContact.customer.ownerId !== ownerId
+    ) {
       await tx.customer.update({
         where: {
           id: existingContact.customerId
         },
         data: {
           ownerId
+        }
+      });
+    }
+
+    if (existingContact) {
+      await tx.customer.update({
+        where: {
+          id: existingContact.customerId
+        },
+        data: {
+          updatedAt: new Date()
         }
       });
     }
@@ -218,13 +267,52 @@ export async function createProductInquiry(formData: FormData) {
     return { inquiry };
   });
 
-  await sendInquiryConfirmationEmail({
-    contactName,
-    inquiryId: inquiry.id,
-    message: enrichedMessage,
-    subject: inquiry.subject,
-    to: email
-  });
+  let notificationRecipients = inquiry.ownerId
+    ? await prisma.user.findMany({
+        where: {
+          id: inquiry.ownerId,
+          status: "ACTIVE"
+        },
+        select: {
+          email: true
+        }
+      })
+    : [];
 
-  redirect(`/products/${productSlug}?sent=1`);
+  if (notificationRecipients.length === 0) {
+    notificationRecipients = await prisma.user.findMany({
+        where: {
+          role: {
+            in: ["SUPER_ADMIN", "ADMIN"]
+          },
+          status: "ACTIVE"
+        },
+        select: {
+          email: true
+        }
+      });
+  }
+
+  const [confirmation] = await Promise.all([
+    sendInquiryConfirmationEmail({
+      contactName,
+      inquiryId: inquiry.id,
+      message: enrichedMessage,
+      subject: inquiry.subject,
+      to: email
+    }),
+    sendInquiryTeamNotificationEmail({
+      contactName,
+      customerName: companyName,
+      event: "NEW_INQUIRY",
+      inquiryId: inquiry.id,
+      message: enrichedMessage,
+      subject: inquiry.subject,
+      to: notificationRecipients.map((recipient) => recipient.email)
+    })
+  ]);
+
+  redirect(
+    `/products/${product.slug}?sent=1&email=${confirmation.delivered ? "1" : "0"}`
+  );
 }

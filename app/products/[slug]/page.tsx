@@ -11,6 +11,7 @@ type ProductDetailPageProps = {
     slug: string;
   }>;
   searchParams: Promise<{
+    email?: string;
     sent?: string;
   }>;
 };
@@ -139,11 +140,14 @@ export default async function ProductDetailPage({
           <p className="eyebrow">Inquiry</p>
           <h2>发起询盘</h2>
           {query.sent === "1" ? (
-            <p className="success-note">询盘已提交，我们会尽快回复。</p>
+            <p className="success-note">
+              {query.email === "0"
+                ? "询盘已提交。确认邮件暂未发出，业务人员仍会通过你填写的邮箱联系。"
+                : "询盘已提交，请查收确认邮件并保存会话入口。"}
+            </p>
           ) : null}
           <form action={createProductInquiry} className="public-inquiry-form">
             <input name="productId" type="hidden" value={product.id} />
-            <input name="productSlug" type="hidden" value={product.slug} />
             {variants.length > 0 ? <ProductInquiryOptions variants={variants} /> : null}
             <label>
               <span>公司名称</span>

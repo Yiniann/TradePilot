@@ -32,7 +32,7 @@ export async function sendTransactionalEmail(email: TransactionalEmail) {
       console.error("Email delivery is disabled: SMTP settings are incomplete.");
     }
 
-    return { delivered: false as const };
+    return { delivered: false as const, reason: "NOT_CONFIGURED" as const };
   }
 
   const transporter = nodemailer.createTransport({
@@ -62,6 +62,6 @@ export async function sendTransactionalEmail(email: TransactionalEmail) {
     return { delivered: true as const, providerId: result.messageId };
   } catch (error) {
     console.error("Email delivery failed:", error);
-    return { delivered: false as const };
+    return { delivered: false as const, reason: "DELIVERY_FAILED" as const };
   }
 }

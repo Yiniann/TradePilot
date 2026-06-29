@@ -8,16 +8,24 @@ import { canViewOwnDataOnly } from "@/lib/permissions";
 const inquiryStatusLabels = {
   NEW: "新询盘",
   ASSIGNED: "已分配",
+  CUSTOMER_REPLIED: "客户新回复",
   REPLIED: "已回复",
   CLOSED: "已关闭"
 } as const;
 
+type InquiryStatusFilter =
+  | "PENDING"
+  | "CUSTOMER_REPLIED"
+  | "REPLIED"
+  | "CLOSED"
+  | "ALL";
+
 const inquiryStatusFilters: Array<{
   label: string;
-  value: InquiryStatus | "ALL";
+  value: InquiryStatusFilter;
 }> = [
-  { label: "新询盘", value: "NEW" },
-  { label: "已分配", value: "ASSIGNED" },
+  { label: "待处理", value: "PENDING" },
+  { label: "客户新回复", value: "CUSTOMER_REPLIED" },
   { label: "已回复", value: "REPLIED" },
   { label: "已关闭", value: "CLOSED" },
   { label: "全部", value: "ALL" }
@@ -36,14 +44,28 @@ export default async function InquiriesPage({ searchParams }: InquiriesPageProps
   const query = await searchParams;
   const activeStatus = inquiryStatusFilters.some((filter) => filter.value === query.status)
     ? query.status
-    : "NEW";
+    : "PENDING";
   const ownerWhere = canViewOwnDataOnly(user.role) ? { ownerId: user.id } : {};
   const inquiryWhere =
     activeStatus === "ALL"
       ? ownerWhere
-      : { ...ownerWhere, status: activeStatus as InquiryStatus };
+      : activeStatus === "PENDING"
+        ? {
+            ...ownerWhere,
+            status: {
+              in: ["NEW", "ASSIGNED", "CUSTOMER_REPLIED"] as InquiryStatus[]
+            }
+          }
+        : { ...ownerWhere, status: activeStatus as InquiryStatus };
 
-  const [inquiries, totalCount, newCount, assignedCount, repliedCount, closedCount] =
+  const [
+    inquiries,
+    totalCount,
+    pendingCount,
+    customerRepliedCount,
+    repliedCount,
+    closedCount
+  ] =
     await Promise.all([
       prisma.inquiry.findMany({
         where: inquiryWhere,
@@ -63,16 +85,23 @@ export default async function InquiriesPage({ searchParams }: InquiriesPageProps
         }
       }),
       prisma.inquiry.count({ where: ownerWhere }),
-      prisma.inquiry.count({ where: { ...ownerWhere, status: "NEW" } }),
-      prisma.inquiry.count({ where: { ...ownerWhere, status: "ASSIGNED" } }),
+      prisma.inquiry.count({
+        where: {
+          ...ownerWhere,
+          status: {
+            in: ["NEW", "ASSIGNED", "CUSTOMER_REPLIED"]
+          }
+        }
+      }),
+      prisma.inquiry.count({ where: { ...ownerWhere, status: "CUSTOMER_REPLIED" } }),
       prisma.inquiry.count({ where: { ...ownerWhere, status: "REPLIED" } }),
       prisma.inquiry.count({ where: { ...ownerWhere, status: "CLOSED" } })
     ]);
 
   const statusCounts = {
     ALL: totalCount,
-    NEW: newCount,
-    ASSIGNED: assignedCount,
+    PENDING: pendingCount,
+    CUSTOMER_REPLIED: customerRepliedCount,
     REPLIED: repliedCount,
     CLOSED: closedCount
   };

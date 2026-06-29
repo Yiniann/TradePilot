@@ -1179,6 +1179,7 @@ button {
 
 .stage-negotiating,
 .inquiry-waiting,
+.inquiry-customer_replied,
 .priority-medium,
 .user-disabled,
 .product-draft {
@@ -1239,13 +1240,20 @@ button {
   gap: 8px;
 }
 
-.queue-list article {
+.queue-list article,
+.queue-list > a {
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
+  color: inherit;
   display: flex;
   justify-content: space-between;
   padding: 9px 10px;
+  text-decoration: none;
+}
+
+.queue-list > a:hover {
+  border-color: var(--primary);
 }
 
 .page-tools {
@@ -1273,6 +1281,21 @@ button {
   min-height: 34px;
   padding: 0 10px;
   width: min(320px, 100%);
+}
+
+.customer-filter-form {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.customer-filter-form > select {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 34px;
+  padding: 0 10px;
 }
 
 .user-create-grid {
@@ -2840,6 +2863,34 @@ td .quiet-button:disabled {
   white-space: pre-wrap;
 }
 
+.message-delivery {
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 10px;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+
+.message-delivery.failed {
+  color: #ad3d32;
+}
+
+.message-delivery button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 700;
+  gap: 5px;
+  padding: 0;
+}
+
 .inquiry-chat-composer {
   border-top: 1px solid var(--line);
   display: grid;
@@ -2864,6 +2915,44 @@ td .quiet-button:disabled {
 }
 
 .inquiry-chat-composer textarea:focus {
+  border-color: var(--primary);
+}
+
+.customer-maintain-form {
+  display: grid;
+  gap: 10px;
+}
+
+.customer-maintain-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.customer-maintain-form label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.customer-maintain-form input,
+.customer-maintain-form select,
+.customer-maintain-form textarea {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font: inherit;
+  outline: none;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.customer-maintain-form textarea {
+  resize: vertical;
+}
+
+.customer-maintain-form input:focus,
+.customer-maintain-form select:focus,
+.customer-maintain-form textarea:focus {
   border-color: var(--primary);
 }
 

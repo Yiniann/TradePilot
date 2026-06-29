@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Check, MessageSquare, Send, UserRound } from "lucide-react";
-import { addInquiryMessage, assignInquiry, updateInquiryStatus } from "../actions";
+import { ArrowLeft, Check, MessageSquare, RotateCcw, Send, UserRound } from "lucide-react";
+import {
+  addInquiryMessage,
+  assignInquiry,
+  retryInquiryMessage,
+  updateInquiryStatus
+} from "../actions";
 import { requireCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -14,6 +19,7 @@ import {
 const inquiryStatusLabels = {
   NEW: "新询盘",
   ASSIGNED: "已分配",
+  CUSTOMER_REPLIED: "客户新回复",
   REPLIED: "已回复",
   CLOSED: "已关闭"
 } as const;
@@ -84,6 +90,9 @@ export default async function InquiryDetailPage({ params }: InquiryDetailPagePro
     direction: "INBOUND" as const,
     body: inquiry.message,
     author: null,
+    deliveredAt: null,
+    deliveryError: null,
+    deliveryStatus: "NOT_APPLICABLE" as const,
     createdAt: inquiry.receivedAt
   };
   const hasInboundMessage = inquiry.messages.some(
@@ -136,6 +145,26 @@ export default async function InquiryDetailPage({ params }: InquiryDetailPagePro
                       </span>
                     </div>
                     <p>{message.body}</p>
+                    {message.direction === "OUTBOUND" &&
+                    message.deliveryStatus !== "SENT" ? (
+                      <div className={`message-delivery ${message.deliveryStatus.toLowerCase()}`}>
+                        <span>
+                          {message.deliveryStatus === "FAILED"
+                            ? message.deliveryError || "邮件发送失败"
+                            : "邮件发送中"}
+                        </span>
+                        {message.deliveryStatus === "FAILED" ? (
+                          <form action={retryInquiryMessage}>
+                            <input name="inquiryId" type="hidden" value={inquiry.id} />
+                            <input name="messageId" type="hidden" value={message.id} />
+                            <button type="submit">
+                              <RotateCcw size={14} />
+                              重试发送
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 </article>
               ))}
@@ -155,7 +184,7 @@ export default async function InquiryDetailPage({ params }: InquiryDetailPagePro
                   <span>保存后会发送邮件给客户，并带上当前业务员信息。</span>
                   <button className="primary-button" type="submit">
                     <Send size={16} />
-                    保存回复
+                  发送回复
                   </button>
                 </div>
               </form>

@@ -23,6 +23,7 @@ const productStatusLabels = {
 const inquiryStatusLabels = {
   NEW: "新询盘",
   ASSIGNED: "已分配",
+  CUSTOMER_REPLIED: "客户新回复",
   REPLIED: "已回复",
   CLOSED: "已关闭"
 } as const;
@@ -42,7 +43,8 @@ export default async function AdminDashboardPage() {
     totalProducts,
     publishedProducts,
     draftProducts,
-    newInquiries,
+    attentionInquiries,
+    sevenDayInquiries,
     totalCustomers,
     productsNeedWork,
     recentProducts,
@@ -81,7 +83,22 @@ export default async function AdminDashboardPage() {
     prisma.product.count(),
     prisma.product.count({ where: { status: "PUBLISHED" } }),
     prisma.product.count({ where: { status: "DRAFT" } }),
-    prisma.inquiry.count({ where: { ...ownerWhere, status: "NEW" } }),
+    prisma.inquiry.count({
+      where: {
+        ...ownerWhere,
+        status: {
+          in: ["NEW", "ASSIGNED", "CUSTOMER_REPLIED"]
+        }
+      }
+    }),
+    prisma.inquiry.count({
+      where: {
+        ...ownerWhere,
+        receivedAt: {
+          gte: sevenDaysStart
+        }
+      }
+    }),
     prisma.customer.count({ where: { ...ownerWhere, deletedAt: null } }),
     prisma.product.findMany({
       where: {
@@ -117,7 +134,7 @@ export default async function AdminDashboardPage() {
   ]);
   const conversionRate =
     sevenDayUniqueVisitors.length > 0
-      ? `${((newInquiries / sevenDayUniqueVisitors.length) * 100).toFixed(1)}%`
+      ? `${((sevenDayInquiries / sevenDayUniqueVisitors.length) * 100).toFixed(1)}%`
       : "0%";
 
   return (
@@ -157,7 +174,7 @@ export default async function AdminDashboardPage() {
           icon={Inbox}
           label="询盘转化"
           value={conversionRate}
-          trend={`${newInquiries} 个新询盘 / 7日UV`}
+          trend={`${sevenDayInquiries} 个询盘 · ${attentionInquiries} 待处理`}
         />
       </section>
 
@@ -175,7 +192,7 @@ export default async function AdminDashboardPage() {
           {recentInquiries.length > 0 ? (
             <div className="queue-list">
               {recentInquiries.map((inquiry) => (
-                <article key={inquiry.id}>
+                <Link href={`/admin/inquiries/${inquiry.id}`} key={inquiry.id}>
                   <div>
                     <strong>{inquiry.subject}</strong>
                     <span>
@@ -186,7 +203,7 @@ export default async function AdminDashboardPage() {
                   <span className={`status-badge inquiry-${inquiry.status.toLowerCase()}`}>
                     {inquiryStatusLabels[inquiry.status]}
                   </span>
-                </article>
+                </Link>
               ))}
             </div>
           ) : (
